@@ -327,4 +327,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **JichoKali Kenya** - *Keeping Kenya Safe, One Report at a Time*
 
-For more information, visit our [website](https://phenomenal-cendol-f4a790.netlify.app) or contact us at info@jichokali.ke
+For more information, visit our [website]((https://jichokalikenya.netlify.app/)) 
