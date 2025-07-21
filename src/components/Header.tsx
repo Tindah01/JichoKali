@@ -1,29 +1,28 @@
 import React from 'react';
-import { Shield, Phone } from 'lucide-react';
+import { Shield, AlertTriangle } from 'lucide-react';
 
-interface HeaderProps {
-  title: string;
-}
-
-export const Header: React.FC<HeaderProps> = ({ title }) => {
+const Header = () => {
   return (
-    <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg">
-      <div className="container mx-auto px-4 py-4">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div className="max-w-4xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Shield className="h-8 w-8" />
+            <div className="bg-red-600 p-2 rounded-lg">
+              <Shield className="w-6 h-6 text-white" />
+            </div>
             <div>
-              <h1 className="text-2xl font-bold">JichoKali</h1>
-              <p className="text-green-100 text-sm">Tunza Usalama - Protect Safety</p>
+              <h1 className="text-xl font-bold text-gray-900">JichoKali Kenya</h1>
+              <p className="text-sm text-gray-600">Report Police Brutality Safely</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Phone className="h-5 w-5" />
-            <span className="text-sm">999</span>
+          <div className="flex items-center space-x-2 bg-orange-50 px-3 py-2 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-orange-600" />
+            <span className="text-sm text-orange-800 font-medium">Anonymous & Secure</span>
           </div>
         </div>
-        <h2 className="text-lg font-semibold mt-2 text-green-50">{title}</h2>
       </div>
     </header>
   );
 };
+
+export default Header;
