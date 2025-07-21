@@ -4,7 +4,7 @@ A secure, anonymous platform for reporting police brutality incidents in Kenya. 
 
 ## 🚀 Live Demo
 
-**Production Site**:(https://phenomenal-cendol-f4a790.netlify.app)](https://jichokalikenya.netlify.app/)
+**Production Site**:(https://jichokalikenya.netlify.app/)
 
 ## 📋 Table of Contents
 
