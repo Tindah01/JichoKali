@@ -1,11 +1,11 @@
-import React from 'react';
-import { Shield, AlertTriangle, Users, FileText, Phone, TrendingUp } from 'lucide-react';
+import React, { memo } from 'react';
+import { Shield, AlertTriangle, Users, FileText, Phone, TrendingUp } from '../utils/icons';
 
 interface HomePageProps {
   onReportClick: () => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onReportClick }) => {
+const HomePage: React.FC<HomePageProps> = memo(({ onReportClick }) => {
   const stats = [
     { label: 'Reports Submitted', value: '1,247', icon: FileText, color: 'text-blue-600 bg-blue-100' },
     { label: 'Cases Resolved', value: '89', icon: Users, color: 'text-green-600 bg-green-100' },
@@ -100,6 +100,6 @@ const HomePage: React.FC<HomePageProps> = ({ onReportClick }) => {
       </div>
     </div>
   );
-};
+});
 
 export default HomePage;

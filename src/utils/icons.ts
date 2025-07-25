@@ -1,0 +1,36 @@
+// Centralized icon imports for better tree-shaking and bundle optimization
+// Only import the specific icons we need from lucide-react
+
+export {
+  Shield,
+  Plus,
+  Phone,
+  BookOpen,
+  User,
+  Home,
+  FileText,
+  AlertTriangle,
+  MapPin,
+  Upload,
+  Calendar,
+  Clock,
+  Users,
+  TrendingUp,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Camera,
+  Scale,
+  Heart,
+  Bell,
+  Lock,
+  Settings,
+  LogOut,
+  Edit2,
+  Save,
+  X,
+  ExternalLink,
+  Download
+} from 'lucide-react';
