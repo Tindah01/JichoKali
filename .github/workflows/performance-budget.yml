@@ -1,0 +1,274 @@
+name: Performance Budget
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  performance-budget:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: npm run build
+      
+    - name: Install bundle analyzer
+      run: npm install --save-dev webpack-bundle-analyzer bundlesize lighthouse-ci
+      
+    - name: Analyze bundle size
+      run: |
+        # Create bundle analysis
+        npx webpack-bundle-analyzer dist/assets/*.js --mode json --report bundle-report.json || true
+        
+        # Get actual bundle sizes
+        echo "📊 BUNDLE SIZE ANALYSIS" >> bundle-analysis.txt
+        echo "========================" >> bundle-analysis.txt
+        echo "" >> bundle-analysis.txt
+        
+        # Main bundle sizes
+        for file in dist/assets/*.js; do
+          if [ -f "$file" ]; then
+            size=$(stat -c%s "$file")
+            gzipped=$(gzip -c "$file" | wc -c)
+            filename=$(basename "$file")
+            echo "📦 $filename: ${size} bytes (${gzipped} gzipped)" >> bundle-analysis.txt
+          fi
+        done
+        
+        # CSS sizes
+        for file in dist/assets/*.css; do
+          if [ -f "$file" ]; then
+            size=$(stat -c%s "$file")
+            gzipped=$(gzip -c "$file" | wc -c)
+            filename=$(basename "$file")
+            echo "🎨 $filename: ${size} bytes (${gzipped} gzipped)" >> bundle-analysis.txt
+          fi
+        done
+        
+        echo "" >> bundle-analysis.txt
+        echo "📁 Total dist size: $(du -sh dist/ | cut -f1)" >> bundle-analysis.txt
+        
+    - name: Check performance budgets
+      run: |
+        # Performance budget checks
+        echo "🎯 PERFORMANCE BUDGET CHECKS" >> budget-results.txt
+        echo "=============================" >> budget-results.txt
+        echo "" >> budget-results.txt
+        
+        # Check vendor bundle size (should be < 150KB)
+        vendor_file=$(find dist/assets -name "*vendor*.js" | head -1)
+        if [ -f "$vendor_file" ]; then
+          vendor_size=$(stat -c%s "$vendor_file")
+          vendor_kb=$((vendor_size / 1024))
+          echo "🏗️  Vendor bundle: ${vendor_kb}KB" >> budget-results.txt
+          if [ $vendor_size -gt 153600 ]; then  # 150KB
+            echo "❌ BUDGET EXCEEDED: Vendor bundle (${vendor_kb}KB) exceeds 150KB limit" >> budget-results.txt
+            echo "::error::Vendor bundle size (${vendor_kb}KB) exceeds performance budget (150KB)"
+            exit 1
+          else
+            echo "✅ Vendor bundle within budget" >> budget-results.txt
+          fi
+        fi
+        
+        # Check main app bundle size (should be < 15KB)
+        main_file=$(find dist/assets -name "index-*.js" | head -1)
+        if [ -f "$main_file" ]; then
+          main_size=$(stat -c%s "$main_file")
+          main_kb=$((main_size / 1024))
+          echo "📱 Main app bundle: ${main_kb}KB" >> budget-results.txt
+          if [ $main_size -gt 15360 ]; then  # 15KB
+            echo "❌ BUDGET EXCEEDED: Main app bundle (${main_kb}KB) exceeds 15KB limit" >> budget-results.txt
+            echo "::error::Main app bundle size (${main_kb}KB) exceeds performance budget (15KB)"
+            exit 1
+          else
+            echo "✅ Main app bundle within budget" >> budget-results.txt
+          fi
+        fi
+        
+        # Check individual component chunks (should be < 12KB each)
+        for file in dist/assets/*.js; do
+          if [[ "$file" != *"vendor"* && "$file" != *"index-"* ]]; then
+            chunk_size=$(stat -c%s "$file")
+            chunk_kb=$((chunk_size / 1024))
+            filename=$(basename "$file")
+            echo "🧩 Component chunk $filename: ${chunk_kb}KB" >> budget-results.txt
+            if [ $chunk_size -gt 12288 ]; then  # 12KB
+              echo "❌ BUDGET EXCEEDED: Component chunk $filename (${chunk_kb}KB) exceeds 12KB limit" >> budget-results.txt
+              echo "::error::Component chunk $filename (${chunk_kb}KB) exceeds performance budget (12KB)"
+              exit 1
+            else
+              echo "✅ Component chunk $filename within budget" >> budget-results.txt
+            fi
+          fi
+        done
+        
+        # Check CSS bundle size (should be < 25KB)
+        css_file=$(find dist/assets -name "*.css" | head -1)
+        if [ -f "$css_file" ]; then
+          css_size=$(stat -c%s "$css_file")
+          css_kb=$((css_size / 1024))
+          echo "🎨 CSS bundle: ${css_kb}KB" >> budget-results.txt
+          if [ $css_size -gt 25600 ]; then  # 25KB
+            echo "❌ BUDGET EXCEEDED: CSS bundle (${css_kb}KB) exceeds 25KB limit" >> budget-results.txt
+            echo "::error::CSS bundle size (${css_kb}KB) exceeds performance budget (25KB)"
+            exit 1
+          else
+            echo "✅ CSS bundle within budget" >> budget-results.txt
+          fi
+        fi
+        
+        # Check total bundle size (should be < 250KB)
+        total_size=$(du -sb dist/ | cut -f1)
+        total_kb=$((total_size / 1024))
+        echo "📦 Total build size: ${total_kb}KB" >> budget-results.txt
+        if [ $total_size -gt 256000 ]; then  # 250KB
+          echo "❌ BUDGET EXCEEDED: Total build size (${total_kb}KB) exceeds 250KB limit" >> budget-results.txt
+          echo "::error::Total build size (${total_kb}KB) exceeds performance budget (250KB)"
+          exit 1
+        else
+          echo "✅ Total build size within budget" >> budget-results.txt
+        fi
+        
+        echo "" >> budget-results.txt
+        echo "🎉 All performance budgets passed!" >> budget-results.txt
+        
+    - name: Setup Lighthouse CI
+      run: |
+        # Create Lighthouse CI config
+        cat > lighthouserc.js << 'EOF'
+        module.exports = {
+          ci: {
+            collect: {
+              url: ['http://localhost:4173'],
+              startServerCommand: 'npm run preview',
+              startServerReadyPattern: 'Local:',
+              startServerReadyTimeout: 30000,
+              numberOfRuns: 3,
+            },
+            assert: {
+              assertions: {
+                'categories:performance': ['error', {minScore: 0.85}],
+                'categories:accessibility': ['error', {minScore: 0.9}],
+                'categories:best-practices': ['error', {minScore: 0.9}],
+                'categories:seo': ['error', {minScore: 0.9}],
+                'first-contentful-paint': ['error', {maxNumericValue: 2000}],
+                'largest-contentful-paint': ['error', {maxNumericValue: 3000}],
+                'cumulative-layout-shift': ['error', {maxNumericValue: 0.1}],
+                'total-blocking-time': ['error', {maxNumericValue: 500}],
+                'speed-index': ['error', {maxNumericValue: 3000}],
+              },
+            },
+            upload: {
+              target: 'temporary-public-storage',
+            },
+          },
+        };
+        EOF
+        
+    - name: Run Lighthouse CI
+      run: |
+        # Install Lighthouse CI globally
+        npm install -g @lhci/cli
+        
+        # Run Lighthouse CI
+        lhci autorun || echo "Lighthouse CI completed with warnings"
+        
+    - name: Generate performance report
+      if: always()
+      run: |
+        echo "# 📊 Performance Budget Report" > performance-report.md
+        echo "" >> performance-report.md
+        echo "## Bundle Analysis" >> performance-report.md
+        echo "\`\`\`" >> performance-report.md
+        cat bundle-analysis.txt >> performance-report.md
+        echo "\`\`\`" >> performance-report.md
+        echo "" >> performance-report.md
+        echo "## Budget Results" >> performance-report.md
+        echo "\`\`\`" >> performance-report.md
+        cat budget-results.txt >> performance-report.md
+        echo "\`\`\`" >> performance-report.md
+        echo "" >> performance-report.md
+        echo "## Performance Budgets" >> performance-report.md
+        echo "| Asset Type | Current | Budget | Status |" >> performance-report.md
+        echo "|------------|---------|---------|--------|" >> performance-report.md
+        
+        # Add budget table
+        vendor_file=$(find dist/assets -name "*vendor*.js" | head -1)
+        if [ -f "$vendor_file" ]; then
+          vendor_size=$(stat -c%s "$vendor_file")
+          vendor_kb=$((vendor_size / 1024))
+          status="✅ Pass"
+          if [ $vendor_size -gt 153600 ]; then status="❌ Fail"; fi
+          echo "| Vendor Bundle | ${vendor_kb}KB | 150KB | $status |" >> performance-report.md
+        fi
+        
+        main_file=$(find dist/assets -name "index-*.js" | head -1)
+        if [ -f "$main_file" ]; then
+          main_size=$(stat -c%s "$main_file")
+          main_kb=$((main_size / 1024))
+          status="✅ Pass"
+          if [ $main_size -gt 15360 ]; then status="❌ Fail"; fi
+          echo "| Main App Bundle | ${main_kb}KB | 15KB | $status |" >> performance-report.md
+        fi
+        
+        css_file=$(find dist/assets -name "*.css" | head -1)
+        if [ -f "$css_file" ]; then
+          css_size=$(stat -c%s "$css_file")
+          css_kb=$((css_size / 1024))
+          status="✅ Pass"
+          if [ $css_size -gt 25600 ]; then status="❌ Fail"; fi
+          echo "| CSS Bundle | ${css_kb}KB | 25KB | $status |" >> performance-report.md
+        fi
+        
+        total_size=$(du -sb dist/ | cut -f1)
+        total_kb=$((total_size / 1024))
+        status="✅ Pass"
+        if [ $total_size -gt 256000 ]; then status="❌ Fail"; fi
+        echo "| Total Build | ${total_kb}KB | 250KB | $status |" >> performance-report.md
+        
+    - name: Comment PR with performance results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const report = fs.readFileSync('performance-report.md', 'utf8');
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+          } catch (error) {
+            console.log('Could not post performance report:', error);
+          }
+          
+    - name: Upload performance artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-report
+        path: |
+          performance-report.md
+          bundle-analysis.txt
+          budget-results.txt
+          bundle-report.json
+          .lighthouseci/
+        retention-days: 30

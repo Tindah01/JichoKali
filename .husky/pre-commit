@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Skip performance checks in CI to avoid double-checking
+if [ "$CI" = "true" ]; then
+  echo "⏭️  Skipping performance checks in CI (will run in GitHub Actions)"
+  exit 0
+fi
+
+echo "🎯 Running performance budget checks..."
+
+# Run performance budget check
+npm run performance:full
+
+if [ $? -ne 0 ]; then
+  echo "❌ Performance budget check failed!"
+  echo "🔧 Please optimize your build before committing."
+  echo "💡 Run 'npm run performance:analyze' to analyze bundle composition."
+  exit 1
+fi
+
+echo "✅ Performance budget checks passed!"
