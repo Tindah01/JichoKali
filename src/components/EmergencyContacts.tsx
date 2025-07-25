@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MapPin, Clock, AlertTriangle, Shield, Users, Scale, Heart } from 'lucide-react';
+import { Phone, MapPin, Clock, AlertTriangle, Shield, Users, Scale, Heart } from '../utils/icons';
 
 const EmergencyContacts = () => {
   const [activeCategory, setActiveCategory] = useState('emergency');

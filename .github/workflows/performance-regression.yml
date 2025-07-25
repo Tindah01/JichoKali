@@ -1,0 +1,298 @@
+name: Performance Regression Detection
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  performance-regression:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies (PR branch)
+      run: npm ci
+      
+    - name: Build PR branch
+      run: npm run build
+      
+    - name: Collect PR metrics
+      run: |
+        echo "📊 Collecting PR branch metrics..."
+        
+        # Bundle sizes
+        echo "PR_VENDOR_SIZE=$(find dist/assets -name "*vendor*.js" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> pr-metrics.env
+        echo "PR_MAIN_SIZE=$(find dist/assets -name "index-*.js" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> pr-metrics.env
+        echo "PR_CSS_SIZE=$(find dist/assets -name "*.css" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> pr-metrics.env
+        echo "PR_TOTAL_SIZE=$(du -sb dist/ | cut -f1)" >> pr-metrics.env
+        
+        # Component chunks
+        PR_COMPONENT_SIZES=$(find dist/assets -name "*.js" ! -name "*vendor*" ! -name "index-*" -exec stat -c%s {} \; 2>/dev/null | paste -sd+ | bc 2>/dev/null || echo 0)
+        echo "PR_COMPONENT_SIZES=$PR_COMPONENT_SIZES" >> pr-metrics.env
+        
+        # Count chunks
+        PR_CHUNK_COUNT=$(find dist/assets -name "*.js" | wc -l)
+        echo "PR_CHUNK_COUNT=$PR_CHUNK_COUNT" >> pr-metrics.env
+        
+        # Save PR metrics
+        cp pr-metrics.env pr-metrics-final.env
+        
+    - name: Save PR artifacts
+      run: |
+        mkdir -p pr-artifacts
+        cp -r dist/ pr-artifacts/
+        cp pr-metrics-final.env pr-artifacts/
+        
+    - name: Checkout base branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.base_ref }}
+        path: base-branch
+        
+    - name: Setup Node.js for base
+      working-directory: base-branch
+      run: |
+        if [ -f package.json ]; then
+          npm ci
+        else
+          echo "No package.json found in base branch"
+          exit 0
+        fi
+        
+    - name: Build base branch
+      working-directory: base-branch
+      run: |
+        if [ -f package.json ]; then
+          npm run build
+        else
+          echo "Skipping base branch build - no package.json"
+          exit 0
+        fi
+        
+    - name: Collect base metrics
+      working-directory: base-branch
+      run: |
+        echo "📊 Collecting base branch metrics..."
+        
+        if [ ! -d dist ]; then
+          echo "No dist directory in base branch, creating empty metrics"
+          echo "BASE_VENDOR_SIZE=0" >> ../base-metrics.env
+          echo "BASE_MAIN_SIZE=0" >> ../base-metrics.env
+          echo "BASE_CSS_SIZE=0" >> ../base-metrics.env
+          echo "BASE_TOTAL_SIZE=0" >> ../base-metrics.env
+          echo "BASE_COMPONENT_SIZES=0" >> ../base-metrics.env
+          echo "BASE_CHUNK_COUNT=0" >> ../base-metrics.env
+        else
+          # Bundle sizes
+          echo "BASE_VENDOR_SIZE=$(find dist/assets -name "*vendor*.js" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> ../base-metrics.env
+          echo "BASE_MAIN_SIZE=$(find dist/assets -name "index-*.js" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> ../base-metrics.env
+          echo "BASE_CSS_SIZE=$(find dist/assets -name "*.css" -exec stat -c%s {} \; 2>/dev/null | head -1 || echo 0)" >> ../base-metrics.env
+          echo "BASE_TOTAL_SIZE=$(du -sb dist/ | cut -f1)" >> ../base-metrics.env
+          
+          # Component chunks
+          BASE_COMPONENT_SIZES=$(find dist/assets -name "*.js" ! -name "*vendor*" ! -name "index-*" -exec stat -c%s {} \; 2>/dev/null | paste -sd+ | bc 2>/dev/null || echo 0)
+          echo "BASE_COMPONENT_SIZES=$BASE_COMPONENT_SIZES" >> ../base-metrics.env
+          
+          # Count chunks
+          BASE_CHUNK_COUNT=$(find dist/assets -name "*.js" | wc -l)
+          echo "BASE_CHUNK_COUNT=$BASE_CHUNK_COUNT" >> ../base-metrics.env
+        fi
+        
+    - name: Calculate performance regression
+      run: |
+        # Load metrics
+        source pr-metrics-final.env
+        source base-metrics.env
+        
+        echo "🔍 PERFORMANCE REGRESSION ANALYSIS" > regression-report.md
+        echo "=================================" >> regression-report.md
+        echo "" >> regression-report.md
+        
+        # Helper function to calculate percentage change
+        calc_change() {
+          local current=$1
+          local base=$2
+          if [ "$base" -eq 0 ]; then
+            if [ "$current" -eq 0 ]; then
+              echo "0"
+            else
+              echo "100"
+            fi
+          else
+            echo "scale=2; (($current - $base) * 100) / $base" | bc -l
+          fi
+        }
+        
+        # Helper function to format size
+        format_size() {
+          local size=$1
+          if [ "$size" -gt 1048576 ]; then
+            echo "scale=1; $size / 1048576" | bc -l | sed 's/$/MB/'
+          elif [ "$size" -gt 1024 ]; then
+            echo "scale=1; $size / 1024" | bc -l | sed 's/$/KB/'
+          else
+            echo "${size}B"
+          fi
+        }
+        
+        # Calculate changes
+        VENDOR_CHANGE=$(calc_change $PR_VENDOR_SIZE $BASE_VENDOR_SIZE)
+        MAIN_CHANGE=$(calc_change $PR_MAIN_SIZE $BASE_MAIN_SIZE)
+        CSS_CHANGE=$(calc_change $PR_CSS_SIZE $BASE_CSS_SIZE)
+        TOTAL_CHANGE=$(calc_change $PR_TOTAL_SIZE $BASE_TOTAL_SIZE)
+        COMPONENT_CHANGE=$(calc_change $PR_COMPONENT_SIZES $BASE_COMPONENT_SIZES)
+        
+        # Create comparison table
+        echo "## Bundle Size Comparison" >> regression-report.md
+        echo "" >> regression-report.md
+        echo "| Asset Type | Base Size | PR Size | Change | Status |" >> regression-report.md
+        echo "|------------|-----------|---------|---------|--------|" >> regression-report.md
+        
+        # Check for regressions (5% threshold)
+        REGRESSION_THRESHOLD=5
+        HAS_REGRESSION=false
+        
+        # Vendor bundle
+        STATUS="✅ OK"
+        if (( $(echo "$VENDOR_CHANGE > $REGRESSION_THRESHOLD" | bc -l) )); then
+          STATUS="⚠️ Regression"
+          HAS_REGRESSION=true
+        fi
+        echo "| Vendor Bundle | $(format_size $BASE_VENDOR_SIZE) | $(format_size $PR_VENDOR_SIZE) | ${VENDOR_CHANGE}% | $STATUS |" >> regression-report.md
+        
+        # Main app bundle
+        STATUS="✅ OK"
+        if (( $(echo "$MAIN_CHANGE > $REGRESSION_THRESHOLD" | bc -l) )); then
+          STATUS="⚠️ Regression"
+          HAS_REGRESSION=true
+        fi
+        echo "| Main App | $(format_size $BASE_MAIN_SIZE) | $(format_size $PR_MAIN_SIZE) | ${MAIN_CHANGE}% | $STATUS |" >> regression-report.md
+        
+        # CSS bundle
+        STATUS="✅ OK"
+        if (( $(echo "$CSS_CHANGE > $REGRESSION_THRESHOLD" | bc -l) )); then
+          STATUS="⚠️ Regression"
+          HAS_REGRESSION=true
+        fi
+        echo "| CSS Bundle | $(format_size $BASE_CSS_SIZE) | $(format_size $PR_CSS_SIZE) | ${CSS_CHANGE}% | $STATUS |" >> regression-report.md
+        
+        # Component chunks
+        STATUS="✅ OK"
+        if (( $(echo "$COMPONENT_CHANGE > $REGRESSION_THRESHOLD" | bc -l) )); then
+          STATUS="⚠️ Regression"
+          HAS_REGRESSION=true
+        fi
+        echo "| Component Chunks | $(format_size $BASE_COMPONENT_SIZES) | $(format_size $PR_COMPONENT_SIZES) | ${COMPONENT_CHANGE}% | $STATUS |" >> regression-report.md
+        
+        # Total size
+        STATUS="✅ OK"
+        if (( $(echo "$TOTAL_CHANGE > $REGRESSION_THRESHOLD" | bc -l) )); then
+          STATUS="⚠️ Regression"
+          HAS_REGRESSION=true
+        fi
+        echo "| **Total Build** | **$(format_size $BASE_TOTAL_SIZE)** | **$(format_size $PR_TOTAL_SIZE)** | **${TOTAL_CHANGE}%** | **$STATUS** |" >> regression-report.md
+        
+        echo "" >> regression-report.md
+        echo "## Analysis" >> regression-report.md
+        echo "" >> regression-report.md
+        
+        if [ "$HAS_REGRESSION" = true ]; then
+          echo "❌ **Performance regression detected!**" >> regression-report.md
+          echo "" >> regression-report.md
+          echo "This PR introduces bundle size increases above the 5% threshold." >> regression-report.md
+          echo "Please review the changes and optimize bundle size before merging." >> regression-report.md
+          echo "" >> regression-report.md
+          echo "### Recommendations:" >> regression-report.md
+          echo "- Check for new dependencies that might be increasing bundle size" >> regression-report.md
+          echo "- Ensure tree-shaking is working correctly" >> regression-report.md
+          echo "- Consider code splitting for large features" >> regression-report.md
+          echo "- Review lazy loading implementation" >> regression-report.md
+          
+          # Set output for GitHub Actions
+          echo "PERFORMANCE_REGRESSION=true" >> $GITHUB_ENV
+          echo "::error::Performance regression detected - bundle size increased by more than 5%"
+        else
+          echo "✅ **No significant performance regressions detected.**" >> regression-report.md
+          echo "" >> regression-report.md
+          echo "All bundle size changes are within acceptable limits." >> regression-report.md
+          
+          # Check for improvements
+          TOTAL_CHANGE_NUM=$(echo "$TOTAL_CHANGE" | sed 's/%//')
+          if (( $(echo "$TOTAL_CHANGE_NUM < -1" | bc -l) )); then
+            echo "" >> regression-report.md
+            echo "🎉 **Bundle size improvement detected!** Great work on optimizing the build." >> regression-report.md
+          fi
+          
+          echo "PERFORMANCE_REGRESSION=false" >> $GITHUB_ENV
+        fi
+        
+        echo "" >> regression-report.md
+        echo "---" >> regression-report.md
+        echo "*Regression threshold: ${REGRESSION_THRESHOLD}% increase*" >> regression-report.md
+        
+    - name: Comment on PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const report = fs.readFileSync('regression-report.md', 'utf8');
+            
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const existingComment = comments.data.find(comment => 
+              comment.body.includes('PERFORMANCE REGRESSION ANALYSIS')
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                comment_id: existingComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            }
+          } catch (error) {
+            console.log('Could not post regression report:', error);
+          }
+          
+    - name: Fail on regression
+      if: env.PERFORMANCE_REGRESSION == 'true'
+      run: |
+        echo "❌ Performance regression detected - failing the build"
+        exit 1
+        
+    - name: Upload regression artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-regression-report
+        path: |
+          regression-report.md
+          pr-metrics-final.env
+          base-metrics.env
+          pr-artifacts/
+        retention-days: 30

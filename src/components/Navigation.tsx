@@ -1,12 +1,12 @@
-import React from 'react';
-import { Home, Plus, FileText, BookOpen, Phone, User } from 'lucide-react';
+import React, { memo } from 'react';
+import { Home, Plus, FileText, BookOpen, Phone, User } from '../utils/icons';
 
 interface NavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
+const Navigation: React.FC<NavigationProps> = memo(({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'report', label: 'Report', icon: Plus },
@@ -42,6 +42,6 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
       </div>
     </nav>
   );
-};
+});
 
 export default Navigation;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Scale, Phone, Users, FileText, ExternalLink, Download, AlertTriangle } from 'lucide-react';
+import { BookOpen, Scale, Phone, Users, FileText, ExternalLink, Download, AlertTriangle } from '../utils/icons';
 
 const Resources = () => {
   const [activeSection, setActiveSection] = useState('legal');

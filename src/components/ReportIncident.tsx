@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Calendar, Clock, Upload, AlertTriangle, Shield, Camera, FileText } from 'lucide-react';
+import { MapPin, Calendar, Clock, Upload, AlertTriangle, Shield, Camera, FileText } from '../utils/icons';
 
 interface ReportIncidentProps {
   onSubmit: (report: any) => void;

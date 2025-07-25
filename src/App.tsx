@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { Shield, Plus, Phone, BookOpen, User, Home, FileText, AlertTriangle, MapPin, Upload, Calendar, Clock, Users } from 'lucide-react';
+import React, { useState, Suspense, lazy, useCallback } from 'react';
+import { Shield, Plus, Phone, BookOpen, User, Home, FileText, AlertTriangle, MapPin, Upload, Calendar, Clock, Users } from './utils/icons';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import HomePage from './components/HomePage';
-import ReportIncident from './components/ReportIncident';
-import MyReports from './components/MyReports';
-import Resources from './components/Resources';
-import EmergencyContacts from './components/EmergencyContacts';
-import Profile from './components/Profile';
+
+// Lazy load components for better code splitting
+const ReportIncident = lazy(() => import('./components/ReportIncident'));
+const MyReports = lazy(() => import('./components/MyReports'));
+const Resources = lazy(() => import('./components/Resources'));
+const EmergencyContacts = lazy(() => import('./components/EmergencyContacts'));
+const Profile = lazy(() => import('./components/Profile'));
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -30,7 +32,7 @@ function App() {
     }
   ]);
 
-  const addReport = (report: any) => {
+  const addReport = useCallback((report: any) => {
     const newReport = {
       ...report,
       id: reports.length + 1,
@@ -39,24 +41,55 @@ function App() {
     };
     setReports([newReport, ...reports]);
     setActiveTab('reports');
-  };
+  }, [reports.length]);
+
+  const handleReportClick = useCallback(() => setActiveTab('report'), []);
+  const handleTabChange = useCallback((tab: string) => setActiveTab(tab), []);
+
+  // Loading component for suspense fallback
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="w-8 h-8 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
+      <span className="ml-3 text-gray-600">Loading...</span>
+    </div>
+  );
 
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <HomePage onReportClick={() => setActiveTab('report')} />;
+        return <HomePage onReportClick={handleReportClick} />;
       case 'report':
-        return <ReportIncident onSubmit={addReport} />;
+        return (
+          <Suspense fallback={<LoadingSpinner />}>
+            <ReportIncident onSubmit={addReport} />
+          </Suspense>
+        );
       case 'reports':
-        return <MyReports reports={reports} />;
+        return (
+          <Suspense fallback={<LoadingSpinner />}>
+            <MyReports reports={reports} />
+          </Suspense>
+        );
       case 'resources':
-        return <Resources />;
+        return (
+          <Suspense fallback={<LoadingSpinner />}>
+            <Resources />
+          </Suspense>
+        );
       case 'emergency':
-        return <EmergencyContacts />;
+        return (
+          <Suspense fallback={<LoadingSpinner />}>
+            <EmergencyContacts />
+          </Suspense>
+        );
       case 'profile':
-        return <Profile />;
+        return (
+          <Suspense fallback={<LoadingSpinner />}>
+            <Profile />
+          </Suspense>
+        );
       default:
-        return <HomePage onReportClick={() => setActiveTab('report')} />;
+        return <HomePage onReportClick={handleReportClick} />;
     }
   };
 
@@ -66,7 +99,7 @@ function App() {
       <main className="max-w-4xl mx-auto px-4 py-6">
         {renderContent()}
       </main>
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }

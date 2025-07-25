@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Calendar, MapPin, Clock, Eye, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, Calendar, MapPin, Clock, Eye, AlertCircle, CheckCircle, XCircle } from '../utils/icons';
 
 interface Report {
   id: number;

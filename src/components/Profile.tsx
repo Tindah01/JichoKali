@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Shield, Bell, Lock, Eye, EyeOff, Settings, LogOut, Edit2, Save, X } from 'lucide-react';
+import { User, Shield, Bell, Lock, Eye, EyeOff, Settings, LogOut, Edit2, Save, X } from '../utils/icons';
 
 const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
