@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, MapPin, TrendingUp, AlertTriangle, Users, Calendar, Filter, Download } from 'lucide-react';
-import { analyticsService, CrimeStatistics } from '../lib/supabase';
+import { analyticsService, CrimeStatistics } from './lib/supabase';
 
 const AdminAnalytics = () => {
   const [crimeStats, setCrimeStats] = useState<any[]>([]);
